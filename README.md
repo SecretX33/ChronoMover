@@ -15,6 +15,9 @@ ChronoMover is a fast, efficient file organization utility written in Rust that 
 - 📝 Dry run mode to preview changes before moving
 - 🧹 Optional cleanup of empty folders after archiving
 - 🔍 Smart filtering (move only previous periods, older than specific dates)
+- 🚫 Ignore specific paths to exclude from processing
+- 📏 Control traversal depth with min/max depth limits
+- 🔗 Optional symbolic link following
 - 🌐 Cross-platform (Windows, macOS, Linux)
 
 ## Download
@@ -40,6 +43,10 @@ chronomover --source <PATH> --destination <PATH> [OPTIONS]
 - `--file-date-types <TYPES>`: Specify which timestamps to check. You can use full names (created, modified, accessed) or first letters (c, m, a) [default: created,modified]
 - `--previous-period-only`: Only move files from previous periods (excludes current period, requires --group-by)
 - `--older-than <TIME>`: Only move files older than specified time (e.g., "30d", "1y", "2w3d")
+- `--ignored-paths <PATHS>`: Comma-separated list of absolute paths to exclude from processing
+- `--min-depth <DEPTH>`: Minimum directory depth to search for files
+- `--max-depth <DEPTH>`: Maximum directory depth to search for files
+- `--follow-symbolic-links`: Follow symbolic links while traversing [default: false]
 - `--dry-run`: Preview what would be moved without actually moving [default: false]
 
 ### Time Format
@@ -112,6 +119,9 @@ For detailed format examples → See [ADVANCED_README.md - Grouping Strategies](
 - Always use `--dry-run` first to preview changes
 - File timestamps depend on filesystem and OS support
 - When multiple `--file-date-types` are specified, the most recent timestamp is used
+- Use `--ignored-paths` to exclude important directories from processing
+- Depth limits (`--min-depth`, `--max-depth`) help control which files are affected
+- Use `--follow-symbolic-links` with caution as it may cause infinite loops if links create cycles
 
 ## Troubleshooting
 

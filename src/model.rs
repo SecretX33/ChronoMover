@@ -34,6 +34,18 @@ pub struct Args {
     )]
     pub file_date_types: Vec<FileDateType>,
 
+    #[arg(long, value_name = "PATHS", value_delimiter = ',', help = "Comma-separated list of files/folders to ignore (absolute paths)")]
+    pub ignored_paths: Option<Vec<PathBuf>>,
+
+    #[arg(long, value_name = "DEPTH", help = "Minimum directory depth to search")]
+    pub min_depth: Option<usize>,
+
+    #[arg(long, value_name = "DEPTH", help = "Maximum directory depth to search")]
+    pub max_depth: Option<usize>,
+
+    #[arg(long, default_value = "false", help = "Follow symbolic links while traversing")]
+    pub follow_symbolic_links: bool,
+
     #[arg(long, default_value = "false", help = "Preview what would be moved without actually moving files")]
     pub dry_run: bool,
 }
@@ -142,6 +154,20 @@ pub fn validate_arguments(args: &Args) -> color_eyre::Result<()> {
         log!("WARNING: --previous-period-only is only meaningful with --group-by");
     }
 
+    if let Some(ignored_paths) = &args.ignored_paths {
+        for path in ignored_paths {
+            if !path.exists() {
+                log!("WARNING: Ignored path does not exist: {}", path.display());
+            }
+        }
+    }
+
+    if let (Some(min_depth), Some(max_depth)) = (args.min_depth, args.max_depth) {
+        if min_depth > max_depth {
+            bail!("Minimum depth ({}) must be less than or equal to maximum depth ({})", min_depth, max_depth);
+        }
+    }
+
     Ok(())
 }
 
@@ -157,6 +183,16 @@ pub fn print_arguments(args: &Args) {
     if let Some(cutoff) = args.older_than {
         log!("Filter: Only files older than {}", cutoff);
     }
+    if let Some(ignored_paths) = &args.ignored_paths {
+        log!("Ignored paths: {:?}", ignored_paths.iter().map(|p| p.display()).collect::<Vec<_>>());
+    }
+    if let Some(min_depth) = args.min_depth {
+        log!("Min depth: {}", min_depth);
+    }
+    if let Some(max_depth) = args.max_depth {
+        log!("Max depth: {}", max_depth);
+    }
+    log!("Follow symbolic links: {}", args.follow_symbolic_links);
     log!("Dry run: {}", args.dry_run);
     log!("");
 }
