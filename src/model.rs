@@ -138,14 +138,14 @@ pub fn validate_arguments(args: &Args) -> color_eyre::Result<()> {
         bail!("Source path is not a directory: {}", args.source.display());
     }
 
-    if !args.destination.exists() {
+    if !args.dry_run && !args.destination.exists() {
         // Create destination directory if it doesn't exist
         log!("Destination directory does not exist. Creating: {}", args.destination.display());
 
         fs::create_dir_all(&args.destination)
             .with_context(|| format!("Failed to create destination directory: {}", args.destination.display()))?;
     }
-    if !args.destination.is_dir() {
+    if !args.dry_run && !args.destination.is_dir() {
         bail!("Destination path is not a directory: {}", args.destination.display());
     }
 
