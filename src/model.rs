@@ -43,6 +43,9 @@ pub struct Args {
     #[arg(long, value_name = "DEPTH", help = "Maximum directory depth to search")]
     pub max_depth: Option<usize>,
 
+    #[arg(long, default_value = "false", help = "Keep empty folders after moving files")]
+    pub keep_empty_folders: bool,
+
     #[arg(long, default_value = "false", help = "Follow symbolic links while traversing")]
     pub follow_symbolic_links: bool,
 
@@ -191,6 +194,9 @@ pub fn print_arguments(args: &Args) {
     }
     if let Some(max_depth) = args.max_depth {
         log!("Max depth: {}", max_depth);
+    }
+    if args.keep_empty_folders {
+        log!("Keeping empty folders after moving files");
     }
     log!("Follow symbolic links: {}", args.follow_symbolic_links);
     log!("Dry run: {}", args.dry_run);

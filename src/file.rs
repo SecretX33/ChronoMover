@@ -220,7 +220,7 @@ pub fn move_files(
 
 /// Delete empty directories recursively
 pub fn delete_empty_directories(args: &Args, root: &Path) -> Result<()> {
-    if !args.dry_run {
+    if args.dry_run || args.keep_empty_folders {
         return Ok(());
     }
 

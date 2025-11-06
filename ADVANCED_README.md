@@ -8,6 +8,7 @@ This document contains technical details, build instructions, scheduling guides,
 - [Grouping Strategies](#grouping-strategies)
 - [Advanced Filtering](#advanced-filtering)
 - [File Timestamp Types](#file-timestamp-types)
+- [Empty Folder Cleanup](#empty-folder-cleanup)
 - [Path Filtering and Traversal Control](#path-filtering-and-traversal-control)
 - [Advanced Usage Examples](#advanced-usage-examples)
 - [Scheduling Automatic Runs](#scheduling-automatic-runs)
@@ -569,6 +570,20 @@ This command:
 - Uses only modification date
 - Previews changes without moving
 
+### Example 13: Preserve Empty Folders During Archiving
+
+Archive files while keeping the original folder structure intact:
+
+```bash
+chronomover --source "C:\ProjectTemplates" --destination "C:\Archive" --older-than 1y --keep-empty-folders
+```
+
+This is useful when:
+- Folder structure serves as a template for new projects
+- Empty folders have organizational meaning
+- Other processes rely on specific folders existing
+- You want to manually clean up folders later
+
 ## Scheduling Automatic Runs
 
 Set up ChronoMover to run automatically on a schedule. This is useful for maintaining a clean workspace without manual intervention.
@@ -715,7 +730,7 @@ Before setting up automatic scheduling, verify your configuration:
 1. Run the command manually with your actual directories
 2. Verify the files are moved correctly
 3. Check that the folder structure is preserved as expected
-4. Ensure empty directories are cleaned up (if not using `--dry-run`)
+4. Verify empty directories are deleted as expected (or use `--keep-empty-folders` to preserve them)
 5. Test the batch file/script if using one
 
 ### Logging Output
@@ -818,6 +833,17 @@ chronomover.exe --source "C:\Notes" --destination "C:\Archive" >> C:\logs\chrono
 - Run without `--follow-symbolic-links` (default behavior)
 - Or use `--max-depth` to limit how deep the traversal goes
 - Check your filesystem for circular symlink references
+
+**Empty folders are not being deleted**
+- Empty folder cleanup is skipped during `--dry-run` mode
+- Run without `--dry-run` to actually delete empty folders
+- Check that you're not using `--keep-empty-folders` flag
+- Verify you have write permissions to delete directories
+
+**Empty folders are being deleted but I want to keep them**
+- Use `--keep-empty-folders` flag to preserve folder structure
+- Example: `chronomover --source "C:\Notes" --destination "C:\Archive" --keep-empty-folders`
+- This is useful for preserving organizational structure or template folders
 
 ### Task Scheduler / Automation Issues (Windows)
 
