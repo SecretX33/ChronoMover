@@ -13,8 +13,11 @@ ChronoMover is a fast, efficient file organization utility written in Rust that 
 - 📁 Flexible time-based grouping (week, biweekly, month, trimester, quadrimester, semester, year)
 - 🛡️ Preserves folder structure in the archive
 - 📝 Dry run mode to preview changes before moving
-- 🧹 Optional cleanup of empty folders after archiving
+- 🧹 Automatic cleanup of empty folders after archiving (optional keep)
 - 🔍 Smart filtering (move only previous periods, older than specific dates)
+- 🚫 Ignore specific paths to exclude from processing
+- 📏 Control traversal depth with min/max depth limits
+- 🔗 Optional symbolic link following
 - 🌐 Cross-platform (Windows, macOS, Linux)
 
 ## Download
@@ -40,6 +43,11 @@ chronomover --source <PATH> --destination <PATH> [OPTIONS]
 - `--file-date-types <TYPES>`: Specify which timestamps to check. You can use full names (created, modified, accessed) or first letters (c, m, a) [default: created,modified]
 - `--previous-period-only`: Only move files from previous periods (excludes current period, requires --group-by)
 - `--older-than <TIME>`: Only move files older than specified time (e.g., "30d", "1y", "2w3d")
+- `--ignored-paths <PATHS>`: Comma-separated list of absolute paths to exclude from processing
+- `--min-depth <DEPTH>`: Minimum directory depth to search for files
+- `--max-depth <DEPTH>`: Maximum directory depth to search for files
+- `--keep-empty-folders`: Keep empty folders after moving files [default: false]
+- `--follow-symbolic-links`: Follow symbolic links while traversing [default: false]
 - `--dry-run`: Preview what would be moved without actually moving [default: false]
 
 ### Time Format
@@ -92,6 +100,11 @@ chronomover --source "C:/Notes" --destination "C:/Archive" --group-by week --pre
 chronomover --source "C:/Notes" --destination "C:/Archive" --file-date-types "modified,accessed"
 ```
 
+#### Keep empty folders after archiving
+```bash
+chronomover --source "C:/Notes" --destination "C:/Archive" --keep-empty-folders
+```
+
 **More examples and advanced usage →** See [ADVANCED_README.md](ADVANCED_README.md)
 
 ## Available Grouping Strategies
@@ -112,6 +125,10 @@ For detailed format examples → See [ADVANCED_README.md - Grouping Strategies](
 - Always use `--dry-run` first to preview changes
 - File timestamps depend on filesystem and OS support
 - When multiple `--file-date-types` are specified, the most recent timestamp is used
+- Use `--ignored-paths` to exclude important directories from processing
+- Depth limits (`--min-depth`, `--max-depth`) help control which files are affected
+- Use `--follow-symbolic-links` with caution as it may cause infinite loops if links create cycles
+- Empty folders are deleted by default after moving files (use `--keep-empty-folders` to preserve them)
 
 ## Troubleshooting
 

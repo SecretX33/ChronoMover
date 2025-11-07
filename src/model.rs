@@ -6,7 +6,7 @@ use color_eyre::eyre::{bail, Context};
 use std::fs;
 use std::path::PathBuf;
 
-#[derive(Parser, Debug)]
+#[derive(Parser, Debug, Clone)]
 #[command(author, version, about, long_about = None)]
 pub struct Args {
     #[arg(short, long, required = true, value_name = "PATH", help = "Source directory containing files to organize")]
@@ -33,6 +33,21 @@ pub struct Args {
         help = "Which timestamps to check (created, modified, accessed). Can use short forms (c, m, a)"
     )]
     pub file_date_types: Vec<FileDateType>,
+
+    #[arg(long, value_name = "PATHS", value_delimiter = ',', help = "Comma-separated list of files/folders to ignore (absolute paths)")]
+    pub ignored_paths: Option<Vec<PathBuf>>,
+
+    #[arg(long, value_name = "DEPTH", help = "Minimum directory depth to search")]
+    pub min_depth: Option<usize>,
+
+    #[arg(long, value_name = "DEPTH", help = "Maximum directory depth to search")]
+    pub max_depth: Option<usize>,
+
+    #[arg(long, default_value = "false", help = "Keep empty folders after moving files")]
+    pub keep_empty_folders: bool,
+
+    #[arg(long, default_value = "false", help = "Follow symbolic links while traversing")]
+    pub follow_symbolic_links: bool,
 
     #[arg(long, default_value = "false", help = "Preview what would be moved without actually moving files")]
     pub dry_run: bool,
@@ -115,6 +130,20 @@ fn parse_older_than(value: &str) -> color_eyre::Result<DateTime<Utc>> {
     Err(eyre::eyre!("Invalid format. Use duration (e.g., '30d', '1y6M'), ISO date ('2025-01-15'), or ISO datetime ('2025-01-15T10:30:00')"))
 }
 
+pub fn enrich_arguments(args: &Args) -> Args {
+    let mut ignored_paths = args.ignored_paths.clone().unwrap_or_default();
+
+    // Automatically add destination to ignored paths to prevent loops
+    if !ignored_paths.contains(&args.destination) {
+        ignored_paths.push(args.destination.clone());
+    }
+
+    Args {
+        ignored_paths: Some(ignored_paths),
+        ..args.clone()
+    }
+}
+
 pub fn validate_arguments(args: &Args) -> color_eyre::Result<()> {
     if !args.source.exists() {
         bail!("Source directory does not exist: {}", args.source.display());
@@ -123,14 +152,14 @@ pub fn validate_arguments(args: &Args) -> color_eyre::Result<()> {
         bail!("Source path is not a directory: {}", args.source.display());
     }
 
-    if !args.destination.exists() {
+    if !args.dry_run && !args.destination.exists() {
         // Create destination directory if it doesn't exist
         log!("Destination directory does not exist. Creating: {}", args.destination.display());
 
         fs::create_dir_all(&args.destination)
             .with_context(|| format!("Failed to create destination directory: {}", args.destination.display()))?;
     }
-    if !args.destination.is_dir() {
+    if !args.dry_run && !args.destination.is_dir() {
         bail!("Destination path is not a directory: {}", args.destination.display());
     }
 
@@ -140,6 +169,20 @@ pub fn validate_arguments(args: &Args) -> color_eyre::Result<()> {
 
     if args.previous_period_only && args.group_by.is_none() {
         log!("WARNING: --previous-period-only is only meaningful with --group-by");
+    }
+
+    if let Some(ignored_paths) = &args.ignored_paths {
+        for path in ignored_paths {
+            if !path.exists() {
+                log!("WARNING: Ignored path does not exist: {}", path.display());
+            }
+        }
+    }
+
+    if let (Some(min_depth), Some(max_depth)) = (args.min_depth, args.max_depth) {
+        if min_depth > max_depth {
+            bail!("Minimum depth ({}) must be less than or equal to maximum depth ({})", min_depth, max_depth);
+        }
     }
 
     Ok(())
@@ -157,6 +200,19 @@ pub fn print_arguments(args: &Args) {
     if let Some(cutoff) = args.older_than {
         log!("Filter: Only files older than {}", cutoff);
     }
+    if let Some(ignored_paths) = &args.ignored_paths {
+        log!("Ignored paths: {:?}", ignored_paths.iter().map(|p| p.display()).collect::<Vec<_>>());
+    }
+    if let Some(min_depth) = args.min_depth {
+        log!("Min depth: {}", min_depth);
+    }
+    if let Some(max_depth) = args.max_depth {
+        log!("Max depth: {}", max_depth);
+    }
+    if args.keep_empty_folders {
+        log!("Keeping empty folders after moving files");
+    }
+    log!("Follow symbolic links: {}", args.follow_symbolic_links);
     log!("Dry run: {}", args.dry_run);
     log!("");
 }

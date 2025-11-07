@@ -146,6 +146,9 @@ jobs:
           toolchain: stable
           targets: ${{ inputs.target_toolchain }}
 
+      - name: Run unit tests
+        run: cargo test --all-features --target ${{ inputs.target_toolchain }}
+
       - name: Build for ${{ needs.os_info.outputs.os_name_pretty }}
         run: cargo build --release --target ${{ inputs.target_toolchain }}
           

@@ -5,7 +5,7 @@ use color_eyre::eyre::{Context, Result};
 use date::{get_biweekly_identifier, get_file_date, get_month_identifier, get_quadrimester_identifier, get_semester_identifier, get_trimester_identifier, get_week_identifier, get_year_identifier};
 use std::fs;
 use std::path::{Path, PathBuf};
-use walkdir::WalkDir;
+use walkdir::{DirEntry, WalkDir};
 
 #[derive(Debug)]
 pub struct FileToMove {
@@ -18,12 +18,18 @@ pub fn get_files_to_move(args: &Args, now: DateTime<Utc>) -> Vec<FileToMove> {
 
     log!("Finding files to move in target folder...");
 
-    for entry in WalkDir::new(&args.source)
-        .into_iter()
+    for entry in walk_source_folder(args)
         .filter_map(|e| e.ok())
         .filter(|e| e.file_type().is_file())
     {
         let path = entry.path();
+
+        // Skip files in ignored paths
+        let is_inside_ignored_folder = args.ignored_paths.as_ref()
+            .map_or(false, |ignored_paths| ignored_paths.iter().any(|ignored_path| path.starts_with(ignored_path)));
+        if is_inside_ignored_folder {
+            continue;
+        }
 
         // Get file date
         match get_file_date(path, &args.file_date_types) {
@@ -82,6 +88,20 @@ pub fn get_files_to_move(args: &Args, now: DateTime<Utc>) -> Vec<FileToMove> {
     log!("Found {} file(s) to move", files_to_move.len());
 
     files_to_move
+}
+
+fn walk_source_folder(args: &Args) -> impl Iterator<Item = Result<DirEntry>> + use<'_> {
+    let mut walk = WalkDir::new(&args.source).follow_links(args.follow_symbolic_links);
+
+    if let Some(min_depth) = args.min_depth {
+        walk = walk.min_depth(min_depth);
+    }
+    if let Some(max_depth) = args.max_depth {
+        walk = walk.max_depth(max_depth);
+    }
+
+    walk.into_iter()
+        .map(|e| e.map_err(|e| e.into()))
 }
 
 /// Determine if a file should be moved based on filters
@@ -200,7 +220,7 @@ pub fn move_files(
 
 /// Delete empty directories recursively
 pub fn delete_empty_directories(args: &Args, root: &Path) -> Result<()> {
-    if !args.dry_run {
+    if args.dry_run || args.keep_empty_folders {
         return Ok(());
     }
 
@@ -213,11 +233,19 @@ pub fn delete_empty_directories(args: &Args, root: &Path) -> Result<()> {
 
         for entry in WalkDir::new(root)
             .min_depth(1)
+            .follow_links(args.follow_symbolic_links)
             .into_iter()
             .filter_map(|e| e.ok())
             .filter(|e| e.file_type().is_dir())
         {
             let path = entry.path();
+
+            // Skip ignored paths
+            let is_inside_ignored_folder = args.ignored_paths.as_ref()
+                .map_or(false, |ignored_paths| ignored_paths.iter().any(|ignored_path| path.starts_with(ignored_path)));
+            if is_inside_ignored_folder {
+                continue;
+            }
 
             // Check if directory is empty
             if let Ok(mut entries) = fs::read_dir(path) {

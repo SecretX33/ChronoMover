@@ -8,6 +8,8 @@ This document contains technical details, build instructions, scheduling guides,
 - [Grouping Strategies](#grouping-strategies)
 - [Advanced Filtering](#advanced-filtering)
 - [File Timestamp Types](#file-timestamp-types)
+- [Empty Folder Cleanup](#empty-folder-cleanup)
+- [Path Filtering and Traversal Control](#path-filtering-and-traversal-control)
 - [Advanced Usage Examples](#advanced-usage-examples)
 - [Scheduling Automatic Runs](#scheduling-automatic-runs)
 - [Troubleshooting](#troubleshooting)
@@ -305,6 +307,151 @@ chronomover --source "C:\Notes" --destination "C:\Archive" --file-date-types cre
 - **Windows**: All three timestamp types are fully supported
 - **macOS/Linux**: File creation time may not be reliably available on all filesystems. The app falls back to modification time when creation time is unavailable.
 
+## Path Filtering and Traversal Control
+
+ChronoMover provides fine-grained control over which files are processed through path filtering and directory traversal options.
+
+### Ignored Paths
+
+Use `--ignored-paths` to exclude specific files or directories from being moved. This is useful for protecting important folders or files that should never be archived.
+
+**Format**: Comma-separated list of absolute paths
+
+**Examples:**
+
+```bash
+# Ignore a single directory
+chronomover --source "C:\Notes" --destination "C:\Archive" --ignored-paths "C:\Notes\Important"
+
+# Ignore multiple directories
+chronomover --source "C:\Notes" --destination "C:\Archive" --ignored-paths "C:\Notes\Important,C:\Notes\Current,C:\Notes\InProgress"
+
+# Ignore a specific file
+chronomover --source "C:\Notes" --destination "C:\Archive" --ignored-paths "C:\Notes\README.md"
+```
+
+**Behavior:**
+- Paths must be absolute (full paths from the root)
+- Any file inside an ignored directory will also be skipped
+- If an ignored path doesn't exist, a warning is logged but execution continues
+- Ignored paths are checked before any filtering logic runs
+
+**Practical use cases:**
+- Exclude "Current" or "Active" project folders
+- Protect configuration files or README files
+- Skip temporary or cache directories
+- Preserve specific important subdirectories
+
+### Directory Depth Control
+
+Control how deep ChronoMover searches for files using `--min-depth` and `--max-depth` options.
+
+**Depth levels:**
+- Depth 0: Files in the source directory root
+- Depth 1: Files in immediate subdirectories
+- Depth 2: Files in subdirectories of subdirectories
+- And so on...
+
+#### Minimum Depth
+
+Only process files at or below the specified depth level.
+
+```bash
+# Only process files in subdirectories (skip root-level files)
+chronomover --source "C:\Notes" --destination "C:\Archive" --min-depth 1
+
+# Only process files in deeply nested folders (2+ levels deep)
+chronomover --source "C:\Notes" --destination "C:\Archive" --min-depth 2
+```
+
+**Use cases:**
+- Skip root-level files but process subdirectories
+- Process only deeply nested files
+- Exclude top-level files from archiving
+
+#### Maximum Depth
+
+Only process files up to the specified depth level.
+
+```bash
+# Only process root-level files (depth 0)
+chronomover --source "C:\Notes" --destination "C:\Archive" --max-depth 0
+
+# Process files up to 2 levels deep
+chronomover --source "C:\Notes" --destination "C:\Archive" --max-depth 2
+```
+
+**Use cases:**
+- Process only root-level files
+- Avoid processing deeply nested subdirectories
+- Limit scope for performance reasons
+- Process flat directory structures
+
+#### Combining Min and Max Depth
+
+```bash
+# Process only files at exactly depth 1 (immediate subdirectories only)
+chronomover --source "C:\Notes" --destination "C:\Archive" --min-depth 1 --max-depth 1
+
+# Process files at depths 2-3 only
+chronomover --source "C:\Notes" --destination "C:\Archive" --min-depth 2 --max-depth 3
+```
+
+**Validation:**
+- If both are specified, min-depth must be ≤ max-depth
+- Invalid combinations will result in an error
+
+### Symbolic Links
+
+By default, ChronoMover does **not** follow symbolic links (symlinks). Use `--follow-symbolic-links` to change this behavior.
+
+```bash
+# Follow symbolic links during traversal
+chronomover --source "C:\Notes" --destination "C:\Archive" --follow-symbolic-links
+```
+
+**Warning: Infinite Loops**
+
+Following symbolic links can cause infinite loops if:
+- A symlink points to a parent directory
+- Symlinks create a cycle in the directory structure
+
+**Best practices when using `--follow-symbolic-links`:**
+- Ensure your directory structure doesn't have circular symlinks
+- Use `--dry-run` first to verify behavior
+- Consider using `--max-depth` to limit traversal
+- Monitor the operation for unexpected behavior
+
+**Platform considerations:**
+- **Windows**: Symbolic links require administrator privileges to create, but can be followed by any user
+- **macOS/Linux**: Symbolic links are common and well-supported
+- Junction points (Windows) and hard links are treated differently by the filesystem
+
+### Combining Traversal Options
+
+You can combine all traversal options for precise control:
+
+```bash
+# Search depth 1-3, follow symlinks, ignore specific paths
+chronomover \
+  --source "C:\Projects" \
+  --destination "C:\Archive" \
+  --min-depth 1 \
+  --max-depth 3 \
+  --follow-symbolic-links \
+  --ignored-paths "C:\Projects\Active,C:\Projects\Client-X" \
+  --group-by month \
+  --older-than 6M
+```
+
+This command:
+- Skips root-level files (min-depth 1)
+- Only searches up to 3 levels deep (max-depth 3)
+- Follows symbolic links
+- Ignores "Active" and "Client-X" directories
+- Groups by month
+- Only moves files older than 6 months
+
 ## Advanced Usage Examples
 
 ### Example 1: Weekly Archive with Previous Weeks Only
@@ -372,6 +519,70 @@ For rapidly changing directories, use biweekly grouping:
 ```bash
 chronomover --source "C:\Logs" --destination "C:\LogArchive" --group-by biweekly --previous-period-only
 ```
+
+### Example 9: Archive Only Root-Level Files
+
+Process only files in the root directory, ignoring all subdirectories:
+
+```bash
+chronomover --source "C:\Downloads" --destination "C:\Downloads\Archive" --max-depth 0 --older-than 30d
+```
+
+### Example 10: Protect Specific Folders While Archiving
+
+Archive all old files except those in "Important" and "Current" folders:
+
+```bash
+chronomover --source "C:\Projects" --destination "C:\Archive" --older-than 3M --ignored-paths "C:\Projects\Important,C:\Projects\Current"
+```
+
+### Example 11: Process Only Immediate Subdirectories
+
+Archive files only from first-level subdirectories, skipping root files and deeply nested files:
+
+```bash
+chronomover --source "C:\Documents" --destination "C:\Archive" --min-depth 1 --max-depth 1 --group-by month
+```
+
+### Example 12: Complex Multi-Filter Archiving
+
+Combine multiple filters for precise control:
+
+```bash
+chronomover \
+  --source "C:\WorkFiles" \
+  --destination "D:\Archive" \
+  --group-by month \
+  --previous-period-only \
+  --older-than 2M \
+  --ignored-paths "C:\WorkFiles\ActiveProjects,C:\WorkFiles\Templates" \
+  --min-depth 1 \
+  --file-date-types modified \
+  --dry-run
+```
+
+This command:
+- Groups files by month
+- Only processes previous months (not current month)
+- Only moves files older than 2 months
+- Ignores "ActiveProjects" and "Templates" folders
+- Skips root-level files (min-depth 1)
+- Uses only modification date
+- Previews changes without moving
+
+### Example 13: Preserve Empty Folders During Archiving
+
+Archive files while keeping the original folder structure intact:
+
+```bash
+chronomover --source "C:\ProjectTemplates" --destination "C:\Archive" --older-than 1y --keep-empty-folders
+```
+
+This is useful when:
+- Folder structure serves as a template for new projects
+- Empty folders have organizational meaning
+- Other processes rely on specific folders existing
+- You want to manually clean up folders later
 
 ## Scheduling Automatic Runs
 
@@ -519,7 +730,7 @@ Before setting up automatic scheduling, verify your configuration:
 1. Run the command manually with your actual directories
 2. Verify the files are moved correctly
 3. Check that the folder structure is preserved as expected
-4. Ensure empty directories are cleaned up (if not using `--dry-run`)
+4. Verify empty directories are deleted as expected (or use `--keep-empty-folders` to preserve them)
 5. Test the batch file/script if using one
 
 ### Logging Output
@@ -597,6 +808,42 @@ chronomover.exe --source "C:\Notes" --destination "C:\Archive" >> C:\logs\chrono
 - Weeks start on Monday
 - Week 1 is the first week containing a Thursday
 - This may differ from your calendar app
+
+**Ignored paths warning appears**
+- Check that paths in `--ignored-paths` are absolute (full paths)
+- Verify paths exist on disk (warnings are logged for non-existent paths)
+- Ensure paths are comma-separated without spaces (unless part of the path)
+- Use quotes around paths with spaces
+
+**Unexpected files are still being moved (ignored paths not working)**
+- Verify you're using absolute paths, not relative paths
+- Check that the ignored path is a parent of the files you want to skip
+- Ensure there are no typos in the ignored paths
+- Use `--dry-run` to verify behavior before moving
+
+**No files found when using depth limits**
+- Check that your depth limits make sense (`min-depth` ≤ `max-depth`)
+- Remember: depth 0 is the root, depth 1 is immediate subdirectories
+- Use `--dry-run` to see which files are being detected
+- Adjust depth values based on your directory structure
+
+**Infinite loop or very slow when following symlinks**
+- You likely have circular symbolic links in your directory structure
+- Stop the operation (Ctrl+C)
+- Run without `--follow-symbolic-links` (default behavior)
+- Or use `--max-depth` to limit how deep the traversal goes
+- Check your filesystem for circular symlink references
+
+**Empty folders are not being deleted**
+- Empty folder cleanup is skipped during `--dry-run` mode
+- Run without `--dry-run` to actually delete empty folders
+- Check that you're not using `--keep-empty-folders` flag
+- Verify you have write permissions to delete directories
+
+**Empty folders are being deleted but I want to keep them**
+- Use `--keep-empty-folders` flag to preserve folder structure
+- Example: `chronomover --source "C:\Notes" --destination "C:\Archive" --keep-empty-folders`
+- This is useful for preserving organizational structure or template folders
 
 ### Task Scheduler / Automation Issues (Windows)
 
