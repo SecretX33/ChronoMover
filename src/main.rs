@@ -1,5 +1,5 @@
 use crate::file::get_files_to_move;
-use crate::model::{print_arguments, validate_arguments, Args};
+use crate::model::{enrich_arguments, print_arguments, validate_arguments, Args};
 use chrono::Utc;
 use clap::Parser;
 use color_eyre::eyre::Result;
@@ -18,6 +18,7 @@ fn main() -> Result<()> {
     print_arguments(&args);
 
     let now = Utc::now();
+    let args = enrich_arguments(&args);
     let files_to_move = get_files_to_move(&args, now);
     move_files(&args, &files_to_move, args.dry_run)?;
     delete_empty_directories(&args, &args.source)?;

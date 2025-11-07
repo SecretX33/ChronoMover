@@ -6,7 +6,7 @@ use color_eyre::eyre::{bail, Context};
 use std::fs;
 use std::path::PathBuf;
 
-#[derive(Parser, Debug)]
+#[derive(Parser, Debug, Clone)]
 #[command(author, version, about, long_about = None)]
 pub struct Args {
     #[arg(short, long, required = true, value_name = "PATH", help = "Source directory containing files to organize")]
@@ -128,6 +128,20 @@ fn parse_older_than(value: &str) -> color_eyre::Result<DateTime<Utc>> {
     }
 
     Err(eyre::eyre!("Invalid format. Use duration (e.g., '30d', '1y6M'), ISO date ('2025-01-15'), or ISO datetime ('2025-01-15T10:30:00')"))
+}
+
+pub fn enrich_arguments(args: &Args) -> Args {
+    let mut ignored_paths = args.ignored_paths.clone().unwrap_or_default();
+
+    // Automatically add destination to ignored paths to prevent loops
+    if !ignored_paths.contains(&args.destination) {
+        ignored_paths.push(args.destination.clone());
+    }
+
+    Args {
+        ignored_paths: Some(ignored_paths),
+        ..args.clone()
+    }
 }
 
 pub fn validate_arguments(args: &Args) -> color_eyre::Result<()> {

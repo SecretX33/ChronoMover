@@ -233,11 +233,19 @@ pub fn delete_empty_directories(args: &Args, root: &Path) -> Result<()> {
 
         for entry in WalkDir::new(root)
             .min_depth(1)
+            .follow_links(args.follow_symbolic_links)
             .into_iter()
             .filter_map(|e| e.ok())
             .filter(|e| e.file_type().is_dir())
         {
             let path = entry.path();
+
+            // Skip ignored paths
+            let is_inside_ignored_folder = args.ignored_paths.as_ref()
+                .map_or(false, |ignored_paths| ignored_paths.iter().any(|ignored_path| path.starts_with(ignored_path)));
+            if is_inside_ignored_folder {
+                continue;
+            }
 
             // Check if directory is empty
             if let Ok(mut entries) = fs::read_dir(path) {
