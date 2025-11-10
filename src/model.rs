@@ -99,7 +99,7 @@ fn parse_older_than(value: &str) -> color_eyre::Result<DateTime<Utc>> {
     let iso_datetime_option =  NaiveDateTime::parse_from_str(value, "%Y-%m-%dT%H:%M:%S").ok()
         .and_then(|dt| {
             let local_offset =  Local::now().offset().fix();
-            return dt.and_local_timezone(local_offset).single()
+            dt.and_local_timezone(local_offset).single()
         })
         .map(|dt| dt.to_utc());
 
@@ -112,7 +112,7 @@ fn parse_older_than(value: &str) -> color_eyre::Result<DateTime<Utc>> {
         .and_then(|date| date.and_hms_opt(0, 0, 0))
         .and_then(|dt| {
             let local_offset =  Local::now().offset().fix();
-            return dt.and_local_timezone(local_offset).single()
+            dt.and_local_timezone(local_offset).single()
         })
         .map(|dt| dt.to_utc());
 
@@ -179,11 +179,10 @@ pub fn validate_arguments(args: &Args) -> color_eyre::Result<()> {
         }
     }
 
-    if let (Some(min_depth), Some(max_depth)) = (args.min_depth, args.max_depth) {
-        if min_depth > max_depth {
+    if let (Some(min_depth), Some(max_depth)) = (args.min_depth, args.max_depth)
+        && min_depth > max_depth {
             bail!("Minimum depth ({}) must be less than or equal to maximum depth ({})", min_depth, max_depth);
         }
-    }
 
     Ok(())
 }
@@ -193,7 +192,7 @@ pub fn print_arguments(args: &Args) {
     log!("Source directory: {}", args.source.display());
     log!("Destination directory: {}", args.destination.display());
     log!("Finding files to move by their: {:?}", args.file_date_types);
-    log!("Grouping By: {}", args.group_by.map(|e| format!("{:?}", e)).unwrap_or("None".to_string()));
+    log!("Grouping By: {}", args.group_by.map_or("None".to_string(), |e| format!("{e:?}")));
     if args.previous_period_only {
         log!("Filter: Previous periods only (excluding current period)");
     }

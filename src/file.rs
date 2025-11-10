@@ -19,14 +19,14 @@ pub fn get_files_to_move(args: &Args, now: DateTime<Utc>) -> Vec<FileToMove> {
     log!("Finding files to move in target folder...");
 
     for entry in walk_source_folder(args)
-        .filter_map(|e| e.ok())
+        .filter_map(Result::ok)
         .filter(|e| e.file_type().is_file())
     {
         let path = entry.path();
 
         // Skip files in ignored paths
         let is_inside_ignored_folder = args.ignored_paths.as_ref()
-            .map_or(false, |ignored_paths| ignored_paths.iter().any(|ignored_path| path.starts_with(ignored_path)));
+            .is_some_and(|ignored_paths| ignored_paths.iter().any(|ignored_path| path.starts_with(ignored_path)));
         if is_inside_ignored_folder {
             continue;
         }
@@ -90,7 +90,7 @@ pub fn get_files_to_move(args: &Args, now: DateTime<Utc>) -> Vec<FileToMove> {
     files_to_move
 }
 
-fn walk_source_folder(args: &Args) -> impl Iterator<Item = Result<DirEntry>> + use<'_> {
+fn walk_source_folder(args: &Args) -> impl Iterator<Item = Result<DirEntry>> {
     let mut walk = WalkDir::new(&args.source).follow_links(args.follow_symbolic_links);
 
     if let Some(min_depth) = args.min_depth {
@@ -101,7 +101,7 @@ fn walk_source_folder(args: &Args) -> impl Iterator<Item = Result<DirEntry>> + u
     }
 
     walk.into_iter()
-        .map(|e| e.map_err(|e| e.into()))
+        .map(|e| e.map_err(Into::into))
 }
 
 /// Determine if a file should be moved based on filters
@@ -113,11 +113,10 @@ fn should_move_file(
     now: DateTime<Utc>,
 ) -> bool {
     // Check older_than filter if specified
-    if let Some(cutoff) = older_than {
-        if file_datetime >= cutoff {
+    if let Some(cutoff) = older_than
+        && file_datetime >= cutoff {
             return false;
         }
-    }
 
     // Check previous_period_only filter if specified
     if previous_period_only {
@@ -171,7 +170,7 @@ fn calculate_dest_path(
 /// Execute the move plan (or preview in dry-run mode)
 pub fn move_files(
     args: &Args,
-    files_to_move: &Vec<FileToMove>,
+    files_to_move: &[FileToMove],
     dry_run: bool,
 ) -> Result<()> {
     if !files_to_move.is_empty() {
@@ -193,7 +192,7 @@ pub fn move_files(
             }
 
             // Move the file
-            if let Err(e) = fs::rename(&source_path, &dest_path) {
+            if let Err(e) = fs::rename(source_path, dest_path) {
                 log!("ERROR: Moving file {}: {}", source_path.display(), e);
                 continue;
             }
@@ -235,28 +234,27 @@ pub fn delete_empty_directories(args: &Args, root: &Path) -> Result<()> {
             .min_depth(1)
             .follow_links(args.follow_symbolic_links)
             .into_iter()
-            .filter_map(|e| e.ok())
+            .filter_map(Result::ok)
             .filter(|e| e.file_type().is_dir())
         {
             let path = entry.path();
 
             // Skip ignored paths
             let is_inside_ignored_folder = args.ignored_paths.as_ref()
-                .map_or(false, |ignored_paths| ignored_paths.iter().any(|ignored_path| path.starts_with(ignored_path)));
+                .is_some_and(|ignored_paths| ignored_paths.iter().any(|ignored_path| path.starts_with(ignored_path)));
             if is_inside_ignored_folder {
                 continue;
             }
 
             // Check if directory is empty
-            if let Ok(mut entries) = fs::read_dir(path) {
-                if entries.next().is_none() {
+            if let Ok(mut entries) = fs::read_dir(path)
+                && entries.next().is_none() {
                     // Directory is empty, delete it
                     fs::remove_dir(path)
                         .with_context(|| format!("Failed to delete empty directory: {}", path.display()))?;
                     deleted_dirs.push(path.to_path_buf());
                     found_empty = true;
                 }
-            }
         }
 
         // If we didn't find any empty directories, we're done

@@ -176,12 +176,12 @@ pub fn calculate_quadrimester(month: u32) -> u32 {
 }
 
 fn validate_month(month: u32) {
-    debug_assert!(month >= 1 && month <= 12, "month must be between 1 and 12, got {}", month);
+    debug_assert!((1..=12).contains(&month), "month must be between 1 and 12, got {month}");
 }
 
 /// Calculate biweekly number from ISO week (handles week 53 edge case)
 pub fn calculate_biweekly(iso_week: u32) -> u32 {
-    debug_assert!(iso_week > 0 && iso_week <= 53, "iso_week must be between 1 and 53, got {}", iso_week);
+    debug_assert!((0..=53).contains(&iso_week), "iso_week must be between 1 and 53, got {iso_week}");
     // Weeks 51-53 all map to BW26
     if iso_week >= 51 {
         26
