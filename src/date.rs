@@ -36,8 +36,7 @@ fn get_file_timestamps(path: &Path) -> Result<FileTimestamps> {
         .with_context(|| format!("Failed to get creation time for: {}", path.display()))?;
     let modified = metadata.modified()
         .with_context(|| format!("Failed to get modified time for: {}", path.display()))?;
-    let accessed = metadata.accessed()
-        .with_context(|| format!("Failed to get accessed time for: {}", path.display()))?;
+    let accessed = metadata.accessed().unwrap_or(modified);
 
     Ok(FileTimestamps {
         created: created.into(),
