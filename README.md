@@ -49,6 +49,7 @@ chronomover --source <PATH> --destination <PATH> [OPTIONS]
 - `--keep-empty-folders`: Keep empty folders after moving files [default: false]
 - `--follow-symbolic-links`: Follow symbolic links while traversing [default: false]
 - `--dry-run`: Preview what would be moved without actually moving [default: false]
+- `--collision-strategy <STRATEGY>`: How to handle files that already exist at destination (fail, skip, overwrite, rename) [default: fail]
 
 ### Time Format
 
@@ -62,6 +63,12 @@ The time format for `--older-than` supports human-readable formats:
 - `7y`, `7year` - 7 years
 
 You can combine them: `1y6M` (1 year and 6 months), `2w3d` (2 weeks and 3 days), etc.
+
+You can also use ISO dates and datetimes:
+- `2025-01-15` - Specific date (interpreted as local midnight)
+- `2025-01-15T14:30:00` - Specific datetime (local timezone)
+- `2025-01-15T14:30:00Z` - Specific datetime (UTC)
+- `2025-01-15T14:30:00+05:30` - Specific datetime with timezone offset
 
 ## Examples
 

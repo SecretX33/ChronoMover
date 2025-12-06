@@ -7,6 +7,7 @@ This document contains technical details, build instructions, scheduling guides,
 - [Building from Source](#building-from-source)
 - [Grouping Strategies](#grouping-strategies)
 - [Advanced Filtering](#advanced-filtering)
+- [File Collision Handling](#file-collision-handling)
 - [File Timestamp Types](#file-timestamp-types)
 - [Empty Folder Cleanup](#empty-folder-cleanup)
 - [Path Filtering and Traversal Control](#path-filtering-and-traversal-control)
@@ -188,7 +189,7 @@ chronomover --source "C:\Notes" --destination "C:\Archive" --group-by month --pr
 chronomover --source "C:\Notes" --destination "C:\Archive" --group-by year --previous-period-only
 ```
 
-**Note**: This flag requires `--group-by`. Using it without grouping will show a warning.
+**Note**: This flag requires `--group-by`. Using it without grouping will result in an error.
 
 ### Older Than Filter
 
@@ -240,6 +241,19 @@ For precise cutoffs with time:
 chronomover --source "C:\Notes" --destination "C:\Archive" --older-than "2025-01-01T09:00:00"
 ```
 
+#### ISO DateTime with Timezone
+
+For precise cutoffs with explicit timezone:
+
+```bash
+# UTC time (Z suffix)
+chronomover --source "C:\Notes" --destination "C:\Archive" --older-than "2025-01-15T12:00:00Z"
+
+# With timezone offset
+chronomover --source "C:\Notes" --destination "C:\Archive" --older-than "2025-01-15T12:00:00+05:30"
+chronomover --source "C:\Notes" --destination "C:\Archive" --older-than "2025-01-15T12:00:00-08:00"
+```
+
 #### How Cutoff Times Are Calculated
 
 The cutoff time is determined differently based on the format:
@@ -267,6 +281,35 @@ chronomover --source "C:\Notes" --destination "C:\Archive" --group-by week --pre
 
 # Files from previous months AND older than 6 months
 chronomover --source "C:\Notes" --destination "C:\Archive" --group-by month --previous-period-only --older-than 6M
+```
+
+## File Collision Handling
+
+When moving files, ChronoMover may encounter situations where a file already exists at the destination. Use `--collision-strategy` to control this behavior.
+
+### Available Strategies
+
+| Strategy | Description |
+|----------|-------------|
+| `fail` (default) | Check all destinations before moving. If any collision found, abort with detailed error message |
+| `skip` | Skip files that would collide, log a warning, continue with others |
+| `overwrite` | Replace existing files at destination |
+| `rename` | Add numeric suffix to moved files (file.txt -> file_1.txt) |
+
+### Examples
+
+```bash
+# Default: fail if any collision (safest)
+chronomover --source "C:\Notes" --destination "C:\Archive"
+
+# Skip conflicting files
+chronomover --source "C:\Notes" --destination "C:\Archive" --collision-strategy skip
+
+# Overwrite existing files
+chronomover --source "C:\Notes" --destination "C:\Archive" --collision-strategy overwrite
+
+# Rename moved files to avoid collision
+chronomover --source "C:\Notes" --destination "C:\Archive" --collision-strategy rename
 ```
 
 ## File Timestamp Types

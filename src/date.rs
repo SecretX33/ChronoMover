@@ -180,6 +180,9 @@ fn validate_month(month: u32) {
 }
 
 /// Calculate biweekly number from ISO week (handles week 53 edge case)
+///
+/// Note: Weeks 51-53 all consolidate into BW26 to handle years with 53 weeks.
+/// This means BW26 may span 2-3 weeks at year end, while other periods span exactly 2 weeks.
 pub fn calculate_biweekly(iso_week: u32) -> u32 {
     debug_assert!((0..=53).contains(&iso_week), "iso_week must be between 1 and 53, got {iso_week}");
     // Weeks 51-53 all map to BW26

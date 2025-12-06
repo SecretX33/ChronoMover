@@ -1,7 +1,7 @@
-use crate::model::{Args, GroupBy};
+use crate::model::{Args, CollisionStrategy, GroupBy};
 use crate::{date, log};
 use chrono::{DateTime, Utc};
-use color_eyre::eyre::{Context, Result};
+use color_eyre::eyre::{bail, Context, Result};
 use date::{get_biweekly_identifier, get_file_date, get_month_identifier, get_quadrimester_identifier, get_semester_identifier, get_trimester_identifier, get_week_identifier, get_year_identifier};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -11,6 +11,15 @@ use walkdir::{DirEntry, WalkDir};
 pub struct FileToMove {
     pub source: PathBuf,
     pub destination: PathBuf,
+}
+
+#[derive(Debug, Default)]
+struct MoveStats {
+    success: usize,
+    skipped: usize,
+    renamed: usize,
+    failed: usize,
+    collisions: usize,
 }
 
 pub fn get_files_to_move(args: &Args, now: DateTime<Utc>) -> Vec<FileToMove> {
@@ -26,7 +35,7 @@ pub fn get_files_to_move(args: &Args, now: DateTime<Utc>) -> Vec<FileToMove> {
 
         // Skip files in ignored paths
         let is_inside_ignored_folder = args.ignored_paths.as_ref()
-            .is_some_and(|ignored_paths| ignored_paths.iter().any(|ignored_path| path.starts_with(ignored_path)));
+            .is_some_and(|ignored_paths| is_inside_ignored_path(path, ignored_paths));
         if is_inside_ignored_folder {
             continue;
         }
@@ -104,6 +113,26 @@ fn walk_source_folder(args: &Args) -> impl Iterator<Item = Result<DirEntry>> {
         .map(|e| e.map_err(Into::into))
 }
 
+/// Check if a path is inside any of the given parent paths.
+/// Uses canonicalization and case-insensitive comparison on Windows/macOS.
+fn is_inside_ignored_path(path: &Path, ignored_paths: &[PathBuf]) -> bool {
+    // Canonicalize the path being checked (fallback to original if canonicalization fails)
+    let canonical_path = dunce::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+
+    ignored_paths.iter()
+        .map(|ignored_path| dunce::canonicalize(ignored_path).unwrap_or_else(|_| ignored_path.clone()))
+        .any(|canonical_ignored_path| {
+            if cfg!(any(target_os = "windows", target_os = "macos")) {
+                // Case-insensitive comparison on Windows/macOS
+                let path_str = canonical_path.to_string_lossy().to_lowercase();
+                let ignored_str = canonical_ignored_path.to_string_lossy().to_lowercase();
+                path_str.starts_with(&ignored_str)
+            } else {
+                canonical_path.starts_with(&canonical_ignored_path)
+            }
+        })
+}
+
 /// Determine if a file should be moved based on filters
 fn should_move_file(
     file_datetime: DateTime<Utc>,
@@ -167,51 +196,173 @@ fn calculate_dest_path(
     Ok(dest_path)
 }
 
+/// Validate that no destination files already exist (for Fail strategy)
+pub fn validate_no_collisions(files_to_move: &[FileToMove]) -> Result<()> {
+    let collisions: Vec<&FileToMove> = files_to_move
+        .iter()
+        .filter(|f| f.destination.exists())
+        .collect();
+
+    if !collisions.is_empty() {
+        let collision_list = collisions.iter()
+            .take(5)
+            .map(|f| format!("  - {} -> {}", f.source.display(), f.destination.display()))
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        let more = if collisions.len() > 5 {
+            format!("\n  ... and {} more", collisions.len() - 5)
+        } else {
+            String::new()
+        };
+
+        bail!(
+            "Cannot proceed: {} file(s) already exist at destination.\n\n\
+            Collisions found:\n{}{}\n\n\
+            Options to resolve:\n\
+            1. Use --collision-strategy skip      - Skip conflicting files, move the rest\n\
+            2. Use --collision-strategy overwrite - Replace existing files at destination\n\
+            3. Use --collision-strategy rename    - Add numeric suffix to moved files (file.txt -> file_1.txt)\n\
+            4. Manually remove conflicting files from destination\n\
+            5. Use --dry-run to preview which files would collide",
+            collisions.len(),
+            collision_list,
+            more
+        );
+    }
+    Ok(())
+}
+
+/// Find a unique path by adding numeric suffix (file.txt -> file_1.txt, file_2.txt, etc.)
+fn find_unique_path(path: &Path) -> PathBuf {
+    let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+    let ext = path.extension().and_then(|s| s.to_str());
+    let parent = path.parent().unwrap_or(Path::new(""));
+
+    let mut counter = 1;
+    loop {
+        let new_name = match ext {
+            Some(e) => format!("{}_{}.{}", stem, counter, e),
+            None => format!("{}_{}", stem, counter),
+        };
+        let new_path = parent.join(new_name);
+        if !new_path.exists() {
+            return new_path;
+        }
+        counter += 1;
+    }
+}
+
 /// Execute the move plan (or preview in dry-run mode)
 pub fn move_files(
     args: &Args,
     files_to_move: &[FileToMove],
     dry_run: bool,
 ) -> Result<()> {
+    // Pre-validate for Fail strategy
+    if !dry_run && args.collision_strategy == CollisionStrategy::Fail {
+        validate_no_collisions(files_to_move)?;
+    }
+
     if !files_to_move.is_empty() {
         log!("\nMoving files{}...", if dry_run { " (DRY RUN)" } else { "" } );
     }
 
-    let mut success_count = 0;
+    let mut move_stats = MoveStats::default();
     let max = files_to_move.len();
 
     for (index, item) in files_to_move.iter().enumerate() {
         let source_path = &item.source;
-        let dest_path = &item.destination;
+        let mut destination_path = item.destination.clone();
+
+        // Check for collision
+        let file_already_exists = destination_path.exists();
+
+        if file_already_exists {
+            move_stats.collisions += 1;
+        }
 
         if !dry_run {
+            // Handle collision based on strategy
+            if file_already_exists {
+                match args.collision_strategy {
+                    CollisionStrategy::Skip => {
+                        log!("SKIP: {} (destination exists)", source_path.display());
+                        move_stats.skipped += 1;
+                        continue;
+                    }
+                    CollisionStrategy::Overwrite => {
+                        fs::remove_file(&destination_path)
+                            .with_context(|| format!("Failed to remove existing file: {}", destination_path.display()))?;
+                    }
+                    CollisionStrategy::Rename => {
+                        let original_dest = destination_path.clone();
+                        destination_path = find_unique_path(&destination_path);
+                        log!("WARNING: Renamed {} -> {} (destination existed at {})",
+                            source_path.display(),
+                            destination_path.file_name().unwrap_or_default().to_string_lossy(),
+                            original_dest.display());
+                        move_stats.renamed += 1;
+                    }
+                    CollisionStrategy::Fail => {
+                        // Already validated above, but handle edge case
+                        bail!("Destination exists: {}", destination_path.display());
+                    }
+                }
+            }
+
             // Create parent directories if they don't exist
-            if let Some(parent) = dest_path.parent() {
+            if let Some(parent) = destination_path.parent() {
                 fs::create_dir_all(parent)
                     .with_context(|| format!("Failed to create directory: {}", parent.display()))?;
             }
 
             // Move the file
-            if let Err(e) = fs::rename(source_path, dest_path) {
+            if let Err(e) = fs::rename(source_path, &destination_path) {
                 log!("ERROR: Moving file {}: {}", source_path.display(), e);
+                move_stats.failed += 1;
                 continue;
             }
+            move_stats.success += 1;
         }
 
-        log!(
-            "{}/{}. {}\n       ↳ {}",
-            index + 1,
-            max,
-            source_path.display(),
-            dest_path.parent().map(|it| it.display()).unwrap_or(dest_path.display())
-        );
-        success_count += 1;
+        if !file_already_exists {
+            log!(
+                "{}/{}. {}\n       ↳ {}",
+                index + 1,
+                max,
+                source_path.display(),
+                destination_path.parent().map(|it| it.display()).unwrap_or(destination_path.display())
+            );
+        } else if dry_run {
+            log!(
+                "{}/{}. COLLISION: {}\n       ↳ {} (destination exists)",
+                index + 1,
+                max,
+                source_path.display(),
+                destination_path.display()
+            );
+        }
     }
 
     if args.dry_run {
-        log!("DRY RUN: {} file(s) would have been moved successfully", success_count);
+        log!("DRY RUN: {} file(s) would have been moved successfully", move_stats.success);
     } else {
-        log!("Finished moving files, {} file(s) moved successfully", success_count);
+        log!("Finished moving files, {} file(s) moved successfully", move_stats.success);
+    }
+
+    // Report failed/skipped/renamed files prominently
+    if move_stats.failed > 0 {
+        log!("\nWARNING: {} file(s) failed to move", move_stats.failed);
+    }
+    if move_stats.skipped > 0 {
+        log!("INFO: {} file(s) skipped (destination exists)", move_stats.skipped);
+    }
+    if move_stats.renamed > 0 {
+        log!("INFO: {} file(s) renamed to avoid collision", move_stats.renamed);
+    }
+    if dry_run && move_stats.collisions > 0 {
+        log!("WARNING: {} file(s) would collide with existing files at destination", move_stats.collisions);
     }
 
     Ok(())
@@ -241,7 +392,7 @@ pub fn delete_empty_directories(args: &Args, root: &Path) -> Result<()> {
 
             // Skip ignored paths
             let is_inside_ignored_folder = args.ignored_paths.as_ref()
-                .is_some_and(|ignored_paths| ignored_paths.iter().any(|ignored_path| path.starts_with(ignored_path)));
+                .is_some_and(|ignored_paths| is_inside_ignored_path(path, ignored_paths));
             if is_inside_ignored_folder {
                 continue;
             }

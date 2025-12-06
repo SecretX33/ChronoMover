@@ -1,8 +1,7 @@
 use crate::log;
 use chrono::{DateTime, Local, NaiveDate, NaiveDateTime, Offset, Utc};
 use clap::{Parser, ValueEnum};
-use color_eyre::eyre;
-use color_eyre::eyre::{bail, Context};
+use color_eyre::eyre::{bail, Context, Result};
 use std::fs;
 use std::path::PathBuf;
 
@@ -33,6 +32,15 @@ pub struct Args {
         help = "Which timestamps to check (created, modified, accessed). Can use short forms (c, m, a)"
     )]
     pub file_date_types: Vec<FileDateType>,
+
+    #[arg(
+        long,
+        value_enum,
+        default_value = "fail",
+        value_name = "STRATEGY",
+        help = "How to handle destination file collisions (fail, skip, overwrite, rename)"
+    )]
+    pub collision_strategy: CollisionStrategy,
 
     #[arg(long, value_name = "PATHS", value_delimiter = ',', help = "Comma-separated list of files/folders to ignore (absolute paths)")]
     pub ignored_paths: Option<Vec<PathBuf>>,
@@ -78,8 +86,21 @@ pub enum FileDateType {
     Accessed,
 }
 
+#[derive(Debug, Clone, Copy, ValueEnum, Default, PartialEq)]
+pub enum CollisionStrategy {
+    /// Fail entire operation if any collision detected (default)
+    #[default]
+    Fail,
+    /// Skip file and log warning, continue with other files
+    Skip,
+    /// Overwrite existing file at destination
+    Overwrite,
+    /// Rename moved file with numeric suffix (file.txt -> file_1.txt)
+    Rename,
+}
+
 /// Parse file date type from string
-fn file_date_type_parser(value: &str) -> color_eyre::Result<FileDateType, String> {
+fn file_date_type_parser(value: &str) -> Result<FileDateType, String> {
     let trimmed_value = value.trim();
     match trimmed_value.to_ascii_lowercase().as_str() {
         "c" | "created" => Ok(FileDateType::Created),
@@ -94,11 +115,16 @@ fn file_date_type_parser(value: &str) -> color_eyre::Result<FileDateType, String
 }
 
 /// Parse --older-than argument (duration or ISO date/datetime)
-fn parse_older_than(value: &str) -> color_eyre::Result<DateTime<Utc>> {
-    // Try parsing as ISO datetime first
-    let iso_datetime_option =  NaiveDateTime::parse_from_str(value, "%Y-%m-%dT%H:%M:%S").ok()
+fn parse_older_than(value: &str) -> Result<DateTime<Utc>> {
+    // Try parsing as ISO datetime with timezone (RFC 3339) first
+    if let Ok(dt) = DateTime::parse_from_rfc3339(value) {
+        return Ok(dt.to_utc());
+    }
+
+    // Try parsing as ISO datetime without timezone (local time)
+    let iso_datetime_option = NaiveDateTime::parse_from_str(value, "%Y-%m-%dT%H:%M:%S").ok()
         .and_then(|dt| {
-            let local_offset =  Local::now().offset().fix();
+            let local_offset = Local::now().offset().fix();
             dt.and_local_timezone(local_offset).single()
         })
         .map(|dt| dt.to_utc());
@@ -107,11 +133,11 @@ fn parse_older_than(value: &str) -> color_eyre::Result<DateTime<Utc>> {
         return Ok(dt);
     }
 
-    // Try parsing as ISO date
+    // Try parsing as ISO date (local midnight)
     let iso_date_option = NaiveDate::parse_from_str(value, "%Y-%m-%d").ok()
         .and_then(|date| date.and_hms_opt(0, 0, 0))
         .and_then(|dt| {
-            let local_offset =  Local::now().offset().fix();
+            let local_offset = Local::now().offset().fix();
             dt.and_local_timezone(local_offset).single()
         })
         .map(|dt| dt.to_utc());
@@ -127,7 +153,7 @@ fn parse_older_than(value: &str) -> color_eyre::Result<DateTime<Utc>> {
         return Ok(cutoff);
     }
 
-    Err(eyre::eyre!("Invalid format. Use duration (e.g., '30d', '1y6M'), ISO date ('2025-01-15'), or ISO datetime ('2025-01-15T10:30:00')"))
+    bail!("Invalid format. Use duration (e.g., '30d', '1y6M'), ISO date ('2025-01-15'), ISO datetime ('2025-01-15T10:30:00'), or ISO datetime with timezone ('2025-01-15T10:30:00Z', '2025-01-15T10:30:00+05:30')")
 }
 
 pub fn enrich_arguments(args: &Args) -> Args {
@@ -144,7 +170,7 @@ pub fn enrich_arguments(args: &Args) -> Args {
     }
 }
 
-pub fn validate_arguments(args: &Args) -> color_eyre::Result<()> {
+pub fn validate_arguments(args: &Args) -> Result<()> {
     if !args.source.exists() {
         bail!("Source directory does not exist: {}", args.source.display());
     }
@@ -168,7 +194,7 @@ pub fn validate_arguments(args: &Args) -> color_eyre::Result<()> {
     }
 
     if args.previous_period_only && args.group_by.is_none() {
-        log!("WARNING: --previous-period-only is only meaningful with --group-by");
+        bail!("--previous-period-only requires --group-by. Either specify a grouping strategy (week, month, year, etc.) or remove this option");
     }
 
     if let Some(ignored_paths) = &args.ignored_paths {
