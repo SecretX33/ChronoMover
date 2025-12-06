@@ -35,6 +35,7 @@ jobs:
   check-version:
     runs-on: ubuntu-latest
     name: Check version change
+    if: github.event_name == 'push'
     outputs:
       version_changed: ${{ steps.check.outputs.changed }}
       version: ${{ steps.check.outputs.version }}
@@ -65,7 +66,11 @@ jobs:
   build:
     name: Build
     needs: check-version
-    if: github.event_name == 'workflow_dispatch' || needs.check-version.outputs.version_changed == 'true'
+    if: |
+      always() &&
+      !failure() &&
+      !cancelled() &&
+      (github.event_name == 'workflow_dispatch' || needs.check-version.outputs.version_changed == 'true')
     strategy:
       matrix:
         target_toolchain:
@@ -84,7 +89,11 @@ jobs:
     needs: [check-version, build]
     permissions:
       contents: write
-    if: success() && (github.event_name == 'push' || inputs.build_mode == 'build and release' || inputs.build_mode == 'build and release (force)')
+    if: |
+      always() &&
+      !failure() &&
+      !cancelled() &&
+      (github.event_name == 'push' || inputs.build_mode == 'build and release' || inputs.build_mode == 'build and release (force)')
 
     steps:
       - name: Checkout code
