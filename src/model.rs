@@ -1,8 +1,7 @@
 use crate::log;
 use chrono::{DateTime, Local, NaiveDate, NaiveDateTime, Offset, Utc};
 use clap::{Parser, ValueEnum};
-use color_eyre::eyre;
-use color_eyre::eyre::{bail, Context};
+use color_eyre::eyre::{bail, Context, Result};
 use std::fs;
 use std::path::PathBuf;
 
@@ -101,7 +100,7 @@ pub enum CollisionStrategy {
 }
 
 /// Parse file date type from string
-fn file_date_type_parser(value: &str) -> color_eyre::Result<FileDateType, String> {
+fn file_date_type_parser(value: &str) -> Result<FileDateType, String> {
     let trimmed_value = value.trim();
     match trimmed_value.to_ascii_lowercase().as_str() {
         "c" | "created" => Ok(FileDateType::Created),
@@ -116,7 +115,7 @@ fn file_date_type_parser(value: &str) -> color_eyre::Result<FileDateType, String
 }
 
 /// Parse --older-than argument (duration or ISO date/datetime)
-fn parse_older_than(value: &str) -> color_eyre::Result<DateTime<Utc>> {
+fn parse_older_than(value: &str) -> Result<DateTime<Utc>> {
     // Try parsing as ISO datetime with timezone (RFC 3339) first
     if let Ok(dt) = DateTime::parse_from_rfc3339(value) {
         return Ok(dt.to_utc());
@@ -154,7 +153,7 @@ fn parse_older_than(value: &str) -> color_eyre::Result<DateTime<Utc>> {
         return Ok(cutoff);
     }
 
-    Err(eyre::eyre!("Invalid format. Use duration (e.g., '30d', '1y6M'), ISO date ('2025-01-15'), ISO datetime ('2025-01-15T10:30:00'), or ISO datetime with timezone ('2025-01-15T10:30:00Z', '2025-01-15T10:30:00+05:30')"))
+    bail!("Invalid format. Use duration (e.g., '30d', '1y6M'), ISO date ('2025-01-15'), ISO datetime ('2025-01-15T10:30:00'), or ISO datetime with timezone ('2025-01-15T10:30:00Z', '2025-01-15T10:30:00+05:30')")
 }
 
 pub fn enrich_arguments(args: &Args) -> Args {
@@ -171,7 +170,7 @@ pub fn enrich_arguments(args: &Args) -> Args {
     }
 }
 
-pub fn validate_arguments(args: &Args) -> color_eyre::Result<()> {
+pub fn validate_arguments(args: &Args) -> Result<()> {
     if !args.source.exists() {
         bail!("Source directory does not exist: {}", args.source.display());
     }
