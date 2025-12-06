@@ -44,12 +44,12 @@ chronomover --source <PATH> --destination <PATH> [OPTIONS]
 - `--previous-period-only`: Only move files from previous periods (excludes current period, requires --group-by)
 - `--older-than <TIME>`: Only move files older than specified time (e.g., "30d", "1y", "2w3d")
 - `--ignored-paths <PATHS>`: Comma-separated list of absolute paths to exclude from processing
+- `--collision-strategy <STRATEGY>`: How to handle files that already exist at destination (fail, skip, overwrite, rename) [default: fail]
 - `--min-depth <DEPTH>`: Minimum directory depth to search for files
 - `--max-depth <DEPTH>`: Maximum directory depth to search for files
 - `--keep-empty-folders`: Keep empty folders after moving files [default: false]
 - `--follow-symbolic-links`: Follow symbolic links while traversing [default: false]
 - `--dry-run`: Preview what would be moved without actually moving [default: false]
-- `--collision-strategy <STRATEGY>`: How to handle files that already exist at destination (fail, skip, overwrite, rename) [default: fail]
 
 ### Time Format
 
