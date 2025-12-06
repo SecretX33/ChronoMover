@@ -13,6 +13,15 @@ pub struct FileToMove {
     pub destination: PathBuf,
 }
 
+#[derive(Debug, Default)]
+struct MoveStats {
+    success: usize,
+    skipped: usize,
+    renamed: usize,
+    failed: usize,
+    collisions: usize,
+}
+
 pub fn get_files_to_move(args: &Args, now: DateTime<Utc>) -> Vec<FileToMove> {
     let mut files_to_move: Vec<FileToMove> = Vec::new();
 
@@ -259,105 +268,101 @@ pub fn move_files(
         log!("\nMoving files{}...", if dry_run { " (DRY RUN)" } else { "" } );
     }
 
-    let mut success_count = 0;
-    let mut skipped_count = 0;
-    let mut renamed_count = 0;
-    let mut failed_count = 0;
-    let mut collision_count = 0;
+    let mut move_stats = MoveStats::default();
     let max = files_to_move.len();
 
     for (index, item) in files_to_move.iter().enumerate() {
         let source_path = &item.source;
-        let mut dest_path = item.destination.clone();
+        let mut destination_path = item.destination.clone();
 
         // Check for collision
-        let has_collision = dest_path.exists();
+        let file_already_exists = destination_path.exists();
 
-        if has_collision {
-            collision_count += 1;
+        if file_already_exists {
+            move_stats.collisions += 1;
         }
 
         if !dry_run {
             // Handle collision based on strategy
-            if has_collision {
+            if file_already_exists {
                 match args.collision_strategy {
                     CollisionStrategy::Skip => {
                         log!("SKIP: {} (destination exists)", source_path.display());
-                        skipped_count += 1;
+                        move_stats.skipped += 1;
                         continue;
                     }
                     CollisionStrategy::Overwrite => {
-                        fs::remove_file(&dest_path)
-                            .with_context(|| format!("Failed to remove existing file: {}", dest_path.display()))?;
+                        fs::remove_file(&destination_path)
+                            .with_context(|| format!("Failed to remove existing file: {}", destination_path.display()))?;
                     }
                     CollisionStrategy::Rename => {
-                        let original_dest = dest_path.clone();
-                        dest_path = find_unique_path(&dest_path);
+                        let original_dest = destination_path.clone();
+                        destination_path = find_unique_path(&destination_path);
                         log!("WARNING: Renamed {} -> {} (destination existed at {})",
                             source_path.display(),
-                            dest_path.file_name().unwrap_or_default().to_string_lossy(),
+                            destination_path.file_name().unwrap_or_default().to_string_lossy(),
                             original_dest.display());
-                        renamed_count += 1;
+                        move_stats.renamed += 1;
                     }
                     CollisionStrategy::Fail => {
                         // Already validated above, but handle edge case
-                        bail!("Destination exists: {}", dest_path.display());
+                        bail!("Destination exists: {}", destination_path.display());
                     }
                 }
             }
 
             // Create parent directories if they don't exist
-            if let Some(parent) = dest_path.parent() {
+            if let Some(parent) = destination_path.parent() {
                 fs::create_dir_all(parent)
                     .with_context(|| format!("Failed to create directory: {}", parent.display()))?;
             }
 
             // Move the file
-            if let Err(e) = fs::rename(source_path, &dest_path) {
+            if let Err(e) = fs::rename(source_path, &destination_path) {
                 log!("ERROR: Moving file {}: {}", source_path.display(), e);
-                failed_count += 1;
+                move_stats.failed += 1;
                 continue;
             }
+            move_stats.success += 1;
         }
 
-        if !has_collision {
+        if !file_already_exists {
             log!(
                 "{}/{}. {}\n       ↳ {}",
                 index + 1,
                 max,
                 source_path.display(),
-                dest_path.parent().map(|it| it.display()).unwrap_or(dest_path.display())
+                destination_path.parent().map(|it| it.display()).unwrap_or(destination_path.display())
             );
-            success_count += 1;
         } else if dry_run {
             log!(
                 "{}/{}. COLLISION: {}\n       ↳ {} (destination exists)",
                 index + 1,
                 max,
                 source_path.display(),
-                dest_path.display()
+                destination_path.display()
             );
         }
     }
 
     if args.dry_run {
-        log!("DRY RUN: {} file(s) would have been moved successfully", success_count);
+        log!("DRY RUN: {} file(s) would have been moved successfully", move_stats.success);
     } else {
-        log!("Finished moving files, {} file(s) moved successfully", success_count);
+        log!("Finished moving files, {} file(s) moved successfully", move_stats.success);
     }
 
     // Report failed/skipped/renamed files prominently
-    if failed_count > 0 {
-        log!("\nWARNING: {} file(s) failed to move", failed_count);
+    if move_stats.failed > 0 {
+        log!("\nWARNING: {} file(s) failed to move", move_stats.failed);
     }
-    if skipped_count > 0 {
-        log!("INFO: {} file(s) skipped (destination exists)", skipped_count);
+    if move_stats.skipped > 0 {
+        log!("INFO: {} file(s) skipped (destination exists)", move_stats.skipped);
     }
-    if renamed_count > 0 {
-        log!("INFO: {} file(s) renamed to avoid collision", renamed_count);
+    if move_stats.renamed > 0 {
+        log!("INFO: {} file(s) renamed to avoid collision", move_stats.renamed);
     }
-    if dry_run && collision_count > 0 {
-        log!("WARNING: {} file(s) would collide with existing files at destination", collision_count);
+    if dry_run && move_stats.collisions > 0 {
+        log!("WARNING: {} file(s) would collide with existing files at destination", move_stats.collisions);
     }
 
     Ok(())
