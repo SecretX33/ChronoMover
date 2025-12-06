@@ -2,10 +2,8 @@ name: Build and Release
 
 on:
   push:
-    branches:
-      - master
-    paths:
-      - 'Cargo.toml'
+    branches: [master]
+    paths: ['Cargo.toml']
   workflow_dispatch:
     inputs:
       build_mode:
@@ -25,6 +23,11 @@ on:
         description: Release name (e.g. v1.2.5, empty to generate one automatically)
         type: string
         required: false
+
+# Cancel in-progress deployments for the same branch
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   CARGO_REGISTRY: https://github.com/rust-lang/crates.io-index
@@ -86,6 +89,7 @@ jobs:
   release:
     runs-on: ubuntu-latest
     name: Release
+    environment: production
     needs: [check-version, build]
     permissions:
       contents: write
