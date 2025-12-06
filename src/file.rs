@@ -26,7 +26,7 @@ pub fn get_files_to_move(args: &Args, now: DateTime<Utc>) -> Vec<FileToMove> {
 
         // Skip files in ignored paths
         let is_inside_ignored_folder = args.ignored_paths.as_ref()
-            .is_some_and(|ignored_paths| ignored_paths.iter().any(|ignored_path| path.starts_with(ignored_path)));
+            .is_some_and(|ignored_paths| is_inside_ignored_path(path, ignored_paths));
         if is_inside_ignored_folder {
             continue;
         }
@@ -102,6 +102,26 @@ fn walk_source_folder(args: &Args) -> impl Iterator<Item = Result<DirEntry>> {
 
     walk.into_iter()
         .map(|e| e.map_err(Into::into))
+}
+
+/// Check if a path is inside any of the given parent paths.
+/// Uses canonicalization and case-insensitive comparison on Windows/macOS.
+fn is_inside_ignored_path(path: &Path, ignored_paths: &[PathBuf]) -> bool {
+    // Canonicalize the path being checked (fallback to original if canonicalization fails)
+    let canonical_path = dunce::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+
+    ignored_paths.iter()
+        .map(|ignored_path| dunce::canonicalize(ignored_path).unwrap_or_else(|_| ignored_path.clone()))
+        .any(|canonical_ignored_path| {
+            if cfg!(any(target_os = "windows", target_os = "macos")) {
+                // Case-insensitive comparison on Windows/macOS
+                let path_str = canonical_path.to_string_lossy().to_lowercase();
+                let ignored_str = canonical_ignored_path.to_string_lossy().to_lowercase();
+                path_str.starts_with(&ignored_str)
+            } else {
+                canonical_path.starts_with(&canonical_ignored_path)
+            }
+        })
 }
 
 /// Determine if a file should be moved based on filters
@@ -367,7 +387,7 @@ pub fn delete_empty_directories(args: &Args, root: &Path) -> Result<()> {
 
             // Skip ignored paths
             let is_inside_ignored_folder = args.ignored_paths.as_ref()
-                .is_some_and(|ignored_paths| ignored_paths.iter().any(|ignored_path| path.starts_with(ignored_path)));
+                .is_some_and(|ignored_paths| is_inside_ignored_path(path, ignored_paths));
             if is_inside_ignored_folder {
                 continue;
             }
