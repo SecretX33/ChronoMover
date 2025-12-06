@@ -38,7 +38,7 @@ pub struct Args {
         value_enum,
         default_value = "fail",
         value_name = "STRATEGY",
-        help = "How to handle destination file collisions (skip, overwrite, rename, fail)"
+        help = "How to handle destination file collisions (fail, skip, overwrite, rename)"
     )]
     pub collision_strategy: CollisionStrategy,
 

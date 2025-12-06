@@ -49,7 +49,7 @@ chronomover --source <PATH> --destination <PATH> [OPTIONS]
 - `--keep-empty-folders`: Keep empty folders after moving files [default: false]
 - `--follow-symbolic-links`: Follow symbolic links while traversing [default: false]
 - `--dry-run`: Preview what would be moved without actually moving [default: false]
-- `--collision-strategy <STRATEGY>`: How to handle files that already exist at destination (skip, overwrite, rename, fail) [default: fail]
+- `--collision-strategy <STRATEGY>`: How to handle files that already exist at destination (fail, skip, overwrite, rename) [default: fail]
 
 ### Time Format
 
