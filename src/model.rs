@@ -99,6 +99,12 @@ pub enum CollisionStrategy {
     Rename,
 }
 
+#[derive(Debug)]
+pub struct FileToMove {
+    pub source: PathBuf,
+    pub destination: PathBuf,
+}
+
 /// Parse file date type from string
 fn file_date_type_parser(value: &str) -> Result<FileDateType, String> {
     let trimmed_value = value.trim();

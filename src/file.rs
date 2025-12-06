@@ -1,4 +1,4 @@
-use crate::model::{Args, CollisionStrategy, GroupBy};
+use crate::model::{Args, CollisionStrategy, FileToMove, GroupBy};
 use crate::{date, log};
 use chrono::{DateTime, Utc};
 use color_eyre::eyre::{bail, Context, Result};
@@ -6,12 +6,6 @@ use date::{get_biweekly_identifier, get_file_date, get_month_identifier, get_qua
 use std::fs;
 use std::path::{Path, PathBuf};
 use walkdir::{DirEntry, WalkDir};
-
-#[derive(Debug)]
-pub struct FileToMove {
-    pub source: PathBuf,
-    pub destination: PathBuf,
-}
 
 #[derive(Debug, Default)]
 struct MoveStats {
@@ -27,18 +21,23 @@ pub fn get_files_to_move(args: &Args, now: DateTime<Utc>) -> Vec<FileToMove> {
 
     log!("Finding files to move in target folder...");
 
-    for entry in walk_source_folder(args)
-        .filter_map(Result::ok)
+    let files_inside_target_folder = walk_source_folder(args)
+        .filter_map(|entry| {
+            if let Err(error) = &entry {
+                log!("Failed to read entry: {:?}", error);
+            }
+            entry.ok()
+        })
         .filter(|e| e.file_type().is_file())
-    {
+        .filter(|e| {
+            // Skip files in ignored paths
+            let is_inside_ignored_folder = args.ignored_paths.as_ref()
+                .is_some_and(|ignored_paths| is_inside_ignored_path(e.path(), ignored_paths));
+            !is_inside_ignored_folder
+        });
+    
+    for entry in files_inside_target_folder {
         let path = entry.path();
-
-        // Skip files in ignored paths
-        let is_inside_ignored_folder = args.ignored_paths.as_ref()
-            .is_some_and(|ignored_paths| is_inside_ignored_path(path, ignored_paths));
-        if is_inside_ignored_folder {
-            continue;
-        }
 
         // Get file date
         match get_file_date(path, &args.file_date_types) {
