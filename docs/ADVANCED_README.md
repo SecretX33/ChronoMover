@@ -969,5 +969,5 @@ This project is provided as-is for personal use.
 
 For issues or questions:
 - Report bugs on the [GitHub Issues page](https://github.com/SecretX33/ChronoMover/issues)
-- Check the [main README](README.md) for basic usage
+- Check the [main README](../README.md) for basic usage
 - Review this document for advanced topics
