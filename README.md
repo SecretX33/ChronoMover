@@ -105,7 +105,7 @@ chronomover --source "C:/Notes" --destination "C:/Archive" --file-date-types "mo
 chronomover --source "C:/Notes" --destination "C:/Archive" --keep-empty-folders
 ```
 
-**More examples and advanced usage →** See [ADVANCED_README.md](ADVANCED_README.md)
+**More examples and advanced usage →** See [ADVANCED_README.md](docs/ADVANCED_README.md)
 
 ## Available Grouping Strategies
 
@@ -117,7 +117,7 @@ chronomover --source "C:/Notes" --destination "C:/Archive" --keep-empty-folders
 - **semester** - Half-year folders (e.g., `2025-H1`, `2025-H2`)
 - **year** - Yearly folders (e.g., `2025`)
 
-For detailed format examples → See [ADVANCED_README.md - Grouping Strategies](ADVANCED_README.md#grouping-strategies)
+For detailed format examples → See [ADVANCED_README.md - Grouping Strategies](docs/ADVANCED_README.md#grouping-strategies)
 
 ## Safety Notes
 
@@ -151,7 +151,7 @@ For detailed format examples → See [ADVANCED_README.md - Grouping Strategies](
 - Check that filters (`--older-than`, `--previous-period-only`) aren't excluding everything
 - Remember: `--previous-period-only` only works with `--group-by`
 
-**More troubleshooting?** See [ADVANCED_README.md - Troubleshooting](ADVANCED_README.md#troubleshooting)
+**More troubleshooting?** See [ADVANCED_README.md - Troubleshooting](docs/ADVANCED_README.md#troubleshooting)
 
 ## Building from Source
 
@@ -166,7 +166,7 @@ cargo build
 cargo build --release
 ```
 
-**For more details →** See [ADVANCED_README.md - Building from Source](ADVANCED_README.md#building-from-source)
+**For more details →** See [ADVANCED_README.md - Building from Source](docs/ADVANCED_README.md#building-from-source)
 
 ## Contributing
 
