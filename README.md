@@ -5,6 +5,10 @@
 [![GitHub License](https://img.shields.io/github/license/SecretX33/ChronoMover)](https://github.com/SecretX33/ChronoMover/blob/master/LICENSE)
 [![Rust Version](https://img.shields.io/badge/rust-stable-brightgreen.svg)](https://www.rust-lang.org/)
 
+<div align="center">
+<img src="icons/icon.png" alt="Icon" height="200px" style="border-radius: 10px;">
+</div>
+
 ChronoMover is a fast, efficient file organization utility written in Rust that automatically archives files based on their timestamps. Organize your workspace by moving files to an archive folder with flexible grouping strategies (week, month, year, etc.) while preserving folder structure.
 
 ## Features

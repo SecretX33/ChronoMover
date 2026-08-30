@@ -1,6 +1,6 @@
 [package]
 name = "chronomover"
-version = "0.1.2"
+version = "0.0.0"
 edition = "2024"
 
 [dependencies]
@@ -10,6 +10,10 @@ color-eyre = "0.6.5"
 dunce = "1.0.5"
 humantime = "2.3.0"
 walkdir = "2.5.0"
+
+[target.'cfg(windows)'.build-dependencies]
+chrono = { version = "0.4.45", features = ["now"], default-features = false }
+winresource = "0.1.31"
 
 [profile.release]
 opt-level = 3
