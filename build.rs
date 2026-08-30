@@ -1,7 +1,7 @@
-use chrono::Datelike;
-
 fn main() {
     #[cfg(windows)] {
+        use chrono::Datelike;
+
         let year = chrono::Utc::now().year();
         let name = "ChronoMover";
         let version = env!("CARGO_PKG_VERSION");
