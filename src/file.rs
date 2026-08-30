@@ -369,7 +369,9 @@ pub fn move_files(
 
 /// Delete empty directories recursively
 pub fn delete_empty_directories(args: &Args, root: &Path) -> Result<()> {
-    if args.dry_run || args.keep_empty_folders {
+    if args.dry_run
+        || args.keep_empty_folders
+        || args.ignored_paths.as_ref().is_some_and(|ignored_paths| is_inside_ignored_path(root, ignored_paths)) {
         return Ok(());
     }
 
